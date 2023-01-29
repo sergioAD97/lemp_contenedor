@@ -1,0 +1,77 @@
+version: '3'
+services:
+    web:
+        image: nginx:alpine
+        networks:
+            - docker-network
+       # container_name: web
+        volumes:
+           # - "./etc/nginx/default.conf:/etc/nginx/conf.d/default.conf"
+            - "./etc/ssl:/etc/ssl"
+            - "./web:/var/www/html"
+            - "./etc/nginx/default.template.conf:/etc/nginx/conf.d/default.template"
+        ports:
+            - "${HTTP_PORT}:80"
+            - "${HTTPS_PORT}:443"
+        environment:
+            - NGINX_HOST=${NGINX_HOST}
+            #- VIRTUAL_HOST= a.com
+        command: /bin/sh -c "envsubst '$$NGINX_HOST' < /etc/nginx/conf.d/default.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"
+        restart: always
+        depends_on:
+            - php
+            - mysql
+
+    php:
+        image: nanoninja/php-fpm:latest
+        networks:
+            - docker-network
+       # container_name: php-fpm
+        ports:
+            - "${PHP_PORT}:8000"
+        restart: always
+        volumes:
+            - "./etc/php/php.ini:/usr/local/etc/php/conf.d/php.ini"
+            - "./web:/var/www/html"
+
+    myadmin:
+        image: phpmyadmin/phpmyadmin
+        networks:
+            - docker-network
+       # container_name: myadmin
+        ports:
+            - "${PHPMYADMIN_PORT}:80"
+        environment:
+            - PMA_ARBITRARY=1
+            - PMA_HOST= mysql
+           # - PMA_ABSOLUTE_URI: https://localhost/pma/
+            - UPLOAD_LIMIT= 256M
+        restart: always
+        depends_on:
+            - mysql
+
+    mysql:
+        build:
+            context: .
+            dockerfile: Dockerfile-mariadb
+            args:
+                MARIADB_VERSION: ${MARIADB_VERSION}
+        networks:
+            - docker-network
+  #      container_name: ${MYSQL_HOST}
+        restart: always
+        env_file:
+            - ".env"
+        environment:
+            - MYSQL_DATABASE=${MYSQL_DATABASE}
+            - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+            - MYSQL_USER=${MYSQL_USER}
+            - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+        ports:
+            - "127.0.0.1:${MYSQL_PORT}:3306"
+        volumes:
+            - "./mysql-bbdd:/var/lib/mysql"
+
+networks:
+    docker-network:
+        driver: bridge
